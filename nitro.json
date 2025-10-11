@@ -1,0 +1,17 @@
+{
+  "cxxNamespace": ["tus"],
+  "ios": {
+    "iosModuleName": "Tus"
+  },
+  "android": {
+    "androidNamespace": ["tus"],
+    "androidCxxLibName": "tus"
+  },
+  "autolinking": {
+    "Tus": {
+      "swift": "Tus",
+      "kotlin": "Tus"
+    }
+  },
+  "ignorePaths": ["node_modules"]
+}
