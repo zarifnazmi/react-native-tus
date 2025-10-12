@@ -33,7 +33,7 @@ def getExtOrIntegerDefault(name) {
 android {
   namespace "com.margelo.nitro.tus"
 
-  compileSdkVersion getExtOrIntegerDefault("compileSdkVersion")
+  compileSdk getExtOrIntegerDefault("compileSdkVersion")
 
   defaultConfig {
     minSdkVersion getExtOrIntegerDefault("minSdkVersion")
@@ -125,4 +125,10 @@ dependencies {
   implementation "com.facebook.react:react-android"
   implementation "org.jetbrains.kotlin:kotlin-stdlib:$kotlin_version"
   implementation project(":react-native-nitro-modules")
+  
+  // TUS client for Android
+  implementation "io.tus.android.client:tus-android-client:0.1.12"
+  
+  // WorkManager for background uploads
+  implementation "androidx.work:work-runtime-ktx:2.9.0"
 }

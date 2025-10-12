@@ -8,9 +8,13 @@
     "androidCxxLibName": "tus"
   },
   "autolinking": {
-    "Tus": {
-      "swift": "Tus",
-      "kotlin": "Tus"
+    "TusClient": {
+      "swift": "HybridTusClient",
+      "kotlin": "HybridTusClient"
+    },
+    "TusUpload": {
+      "swift": "HybridTusUpload",
+      "kotlin": "HybridTusUpload"
     }
   },
   "ignorePaths": ["node_modules"]

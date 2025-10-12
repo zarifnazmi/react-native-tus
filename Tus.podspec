@@ -22,6 +22,9 @@ Pod::Spec.new do |s|
 
   s.dependency 'React-jsi'
   s.dependency 'React-callinvoker'
+  s.dependency 'TUSKit', '~> 3.4.1'
+  
+  s.frameworks = 'BackgroundTasks'
 
   load 'nitrogen/generated/ios/Tus+autolinking.rb'
   add_nitrogen_files(s)

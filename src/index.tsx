@@ -1,9 +1,29 @@
-import { NitroModules } from 'react-native-nitro-modules';
-import type { Tus } from './Tus.nitro';
+// Main exports
+export { TusUpload } from './TusUpload';
+export {
+  backgroundUploadManager,
+  BackgroundUploadManager,
+} from './BackgroundUploadManager';
+export { useUploadStore, initializeUploadStore } from './store/uploadStore';
 
-const TusHybridObject =
-  NitroModules.createHybridObject<Tus>('Tus');
+// Type exports
+export type {
+  TusUploadOptions,
+  UploadProgress,
+  UploadError,
+  UploadMetadata,
+  PreviousUpload,
+  ProgressHandler,
+  SuccessHandler,
+  ErrorHandler,
+  ChunkCompleteHandler,
+  EventType,
+  EventHandler,
+  NitroTusOptions,
+  NitroUploadProgress,
+  NitroUploadError,
+  NitroBackgroundOptions,
+} from './types';
 
-export function multiply(a: number, b: number): number {
-  return TusHybridObject.multiply(a, b);
-}
+// Re-export Nitro types for advanced usage
+export type { TusClient, TusUpload as NitroTusUpload } from './Tus.nitro';
