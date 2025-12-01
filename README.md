@@ -1,19 +1,20 @@
 # react-native-tus
 
-A modern, high-performance TUS (resumable upload) client for React Native, built with [Nitro Modules](https://nitro.margelo.com/) for optimal performance. Supports iOS (Swift/TUSKit) and Android (Kotlin/tus-android-client) with a JavaScript API inspired by [tus-js-client](https://github.com/tus/tus-js-client).
+A modern, high-performance TUS (resumable upload) client for React Native, built with [Nitro Modules](https://nitro.margelo.com/) for optimal native performance. Supports iOS and Android with a JavaScript API inspired by [tus-js-client](https://github.com/tus/tus-js-client).
 
-## Features
+## ✨ Features
 
-✅ **Resumable Uploads** - Pause and resume uploads even after app restarts  
-✅ **Background Uploads** - Continue uploads when app is backgrounded  
-✅ **Progress Tracking** - Real-time upload progress with chunk-level callbacks  
-✅ **Persistent State** - Upload state persists across app restarts (zustand + MMKV)  
-✅ **Notifications** - System notifications for upload progress (optional)  
-✅ **Native Performance** - Built with Nitro Modules for zero-overhead native calls  
-✅ **TypeScript** - Full TypeScript support with comprehensive types  
-✅ **tus-js-client API** - Familiar API for easy migration  
+- ✅ **Resumable Uploads** - Pause and resume uploads even after app restarts
+- ✅ **Background Uploads** - Continue uploads when app is backgrounded (iOS & Android)
+- ✅ **Progress Tracking** - Real-time upload progress with chunk-level callbacks
+- ✅ **Persistent State** - Upload state persists across app restarts (Zustand + MMKV)
+- ✅ **Native Performance** - Built with Nitro Modules for zero-overhead native calls
+- ✅ **TypeScript** - Full TypeScript support with comprehensive types
+- ✅ **tus-js-client API** - Familiar API for easy migration from web
 
-## Installation
+## 📦 Installation
+
+### Step 1: Install the Package
 
 ```sh
 npm install react-native-tus react-native-nitro-modules react-native-mmkv
@@ -25,15 +26,17 @@ Or with yarn:
 yarn add react-native-tus react-native-nitro-modules react-native-mmkv
 ```
 
-### iOS Setup
+### Step 2: iOS Setup
 
-1. Install pods:
+#### Install Native Dependencies
 
 ```sh
 cd ios && pod install
 ```
 
-2. Add background modes to your `Info.plist`:
+#### Configure Background Modes
+
+Add the following to your `Info.plist` to enable background uploads:
 
 ```xml
 <key>UIBackgroundModes</key>
@@ -47,106 +50,85 @@ cd ios && pod install
 </array>
 ```
 
-### Android Setup
+**What this does:**
+- `fetch` and `processing` - Allows the app to perform background tasks
+- `BGTaskSchedulerPermittedIdentifiers` - Registers background task identifiers for iOS 13+
 
-1. Add permissions to your `AndroidManifest.xml`:
+### Step 3: Android Setup
+
+#### Add Required Permissions
+
+Add the following permissions to your `AndroidManifest.xml`:
 
 ```xml
+<uses-permission android:name="android.permission.INTERNET" />
 <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
 <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
-<uses-permission android:name="android.permission.INTERNET" />
 ```
 
-2. Gradle sync will automatically handle dependencies via autolinking.
+**What this does:**
+- `INTERNET` - Required for network uploads
+- `POST_NOTIFICATIONS` - Shows upload progress notifications (Android 13+)
+- `FOREGROUND_SERVICE` - Keeps uploads running in background
 
-## Basic Usage
+#### Gradle Sync
 
-### Simple Upload
+The native dependencies will be automatically linked via React Native autolinking. Simply rebuild your app:
+
+```sh
+cd android && ./gradlew clean
+```
+
+## 🚀 Quick Start
+
+### Basic Upload Example
 
 ```typescript
-import { TusUpload } from 'react-native-tus';
+import { TusUpload, backgroundUploadManager } from 'react-native-tus';
 
-// Create an upload
+// Initialize background upload manager (do this once on app start)
+await backgroundUploadManager.initialize({
+  enableNotifications: true,
+  notificationTitle: 'Uploading Files',
+  enableIOSBackgroundTask: true,
+});
+
+// Create and start an upload
 const upload = new TusUpload('file:///path/to/file.jpg', {
   endpoint: 'https://your-tus-server.com/files/',
   metadata: {
     filename: 'photo.jpg',
     filetype: 'image/jpeg',
   },
-  chunkSize: 1024 * 1024, // 1MB chunks
+  chunkSize: 10 * 1024 * 1024, // 10MB chunks
 });
 
-// Set up event handlers
+// Track progress
 upload.on('progress', (bytesUploaded, bytesTotal) => {
   const percentage = (bytesUploaded / bytesTotal) * 100;
   console.log(`Upload progress: ${percentage.toFixed(2)}%`);
 });
 
+// Handle completion
 upload.on('success', () => {
   console.log('Upload complete!');
   console.log('Upload URL:', upload.url);
 });
 
+// Handle errors
 upload.on('error', (error) => {
-  console.error('Upload failed:', error);
+  console.error('Upload failed:', error.message);
 });
 
 // Start the upload
 await upload.start();
 ```
 
-### Pause and Resume
-
-```typescript
-// Pause the upload
-upload.pause();
-
-// Resume later
-await upload.resume();
-```
-
-### Background Uploads
-
-```typescript
-import { backgroundUploadManager } from 'react-native-tus';
-
-// Initialize on app start (e.g., in App.tsx)
-await backgroundUploadManager.initialize({
-  enableNotifications: true,
-  notificationTitle: 'Uploading files',
-  enableIOSBackgroundTask: true,
-});
-
-// Uploads will automatically resume on app restart
-// and continue in the background when app is minimized
-```
-
-### Using Upload Store (Persistent State)
-
-```typescript
-import { useUploadStore } from 'react-native-tus';
-
-function UploadList() {
-  // Access upload store
-  const uploads = useUploadStore((state) => state.getAllUploads());
-  
-  return (
-    <View>
-      {uploads.map((upload) => (
-        <View key={upload.id}>
-          <Text>{upload.metadata.filename}</Text>
-          <Text>Progress: {((upload.offset / upload.uploadSize) * 100).toFixed(1)}%</Text>
-          <Text>Status: {upload.status}</Text>
-        </View>
-      ))}
-    </View>
-  );
-}
-```
-
-## API Reference
+## 📚 API Reference
 
 ### TusUpload Class
+
+The main class for handling file uploads.
 
 #### Constructor
 
@@ -154,121 +136,321 @@ function UploadList() {
 new TusUpload(file: string | { uri: string }, options: TusUploadOptions)
 ```
 
-**Options:**
+**Parameters:**
+
+| Parameter | Type | Description |
+|-----------|------|-------------|
+| `file` | `string \| { uri: string }` | File URI (e.g., `file:///path/to/file.jpg` or `content://...`) |
+| `options` | `TusUploadOptions` | Upload configuration options |
+
+**TusUploadOptions:**
 
 | Option | Type | Default | Description |
 |--------|------|---------|-------------|
 | `endpoint` | `string` | **required** | TUS server endpoint URL |
-| `metadata` | `Record<string, string>` | `{}` | File metadata |
-| `headers` | `Record<string, string>` | `{}` | Custom HTTP headers |
-| `chunkSize` | `number` | `Infinity` | Upload chunk size in bytes |
-| `retryDelays` | `number[]` | `[0, 1000, 3000, 5000]` | Retry delays in milliseconds |
-| `storeFingerprintForResuming` | `boolean` | `true` | Store upload fingerprint for resuming |
-| `removeFingerprintOnSuccess` | `boolean` | `false` | Remove fingerprint after success |
-| `uploadLengthDeferred` | `boolean` | `false` | Allow deferred upload length |
-| `overridePatchMethod` | `boolean` | `false` | Use POST instead of PATCH |
-| `parallelize` | `boolean` | `false` | Enable parallel uploads (Android only) |
+| `metadata` | `Record<string, string>` | `{}` | File metadata (filename, filetype, etc.) |
+| `headers` | `Record<string, string>` | `{}` | Custom HTTP headers for requests |
+| `chunkSize` | `number` | `Infinity` | Upload chunk size in bytes (recommended: 5-10MB) |
+| `retryDelays` | `number[]` | `[0, 1000, 3000, 5000]` | Retry delays in milliseconds for failed chunks |
+| `storeFingerprintForResuming` | `boolean` | `true` | Store upload fingerprint for resuming after restart |
+| `removeFingerprintOnSuccess` | `boolean` | `false` | Remove fingerprint after successful upload |
+| `uploadLengthDeferred` | `boolean` | `false` | Allow deferred upload length (for streaming) |
+| `overridePatchMethod` | `boolean` | `false` | Use POST instead of PATCH for uploads |
+| `parallelize` | `boolean` | `false` | Enable parallel chunk uploads (Android only) |
+| `onProgress` | `function` | - | Progress callback (alternative to `.on('progress')`) |
+| `onSuccess` | `function` | - | Success callback (alternative to `.on('success')`) |
+| `onError` | `function` | - | Error callback (alternative to `.on('error')`) |
+| `onChunkComplete` | `function` | - | Chunk complete callback |
 
 #### Methods
 
-**`start(): Promise<void>`**  
-Start the upload
+##### `start(): Promise<void>`
 
-**`pause(): void`**  
-Pause the upload
+Starts the upload. If the upload was previously paused, it will resume from where it left off.
 
-**`resume(): Promise<void>`**  
-Resume a paused upload
+```typescript
+await upload.start();
+```
 
-**`abort(): Promise<void>`**  
-Abort the upload
+##### `pause(): void`
 
-**`getProgress(): UploadProgress | null`**  
-Get current upload progress
+Pauses the upload. The upload can be resumed later with `resume()` or `start()`.
 
-**`on(event, callback): this`**  
-Register event handler
+```typescript
+upload.pause();
+```
 
-**`off(event, callback?): this`**  
-Unregister event handler
+##### `resume(): Promise<void>`
 
-**`findPreviousUploads(): Promise<PreviousUpload[]>`**  
-Find previous uploads for the same file
+Resumes a paused upload.
 
-**`resumeFromPreviousUpload(previousUpload): void`**  
-Resume from a previous upload
+```typescript
+await upload.resume();
+```
 
-#### Events
+##### `abort(): Promise<void>`
 
-**`progress`** - `(bytesUploaded: number, bytesTotal: number) => void`  
-Fired on upload progress
+Aborts the upload and cleans up resources.
 
-**`success`** - `() => void`  
-Fired when upload completes successfully
+```typescript
+await upload.abort();
+```
 
-**`error`** - `(error: Error) => void`  
-Fired on upload error
+##### `getProgress(): UploadProgress | null`
 
-**`chunkComplete`** - `(chunkSize: number, bytesUploaded: number, bytesTotal: number) => void`  
-Fired after each chunk is uploaded
+Returns the current upload progress.
+
+```typescript
+const progress = upload.getProgress();
+console.log(`${progress.percentage.toFixed(2)}% complete`);
+```
+
+**Returns:**
+```typescript
+{
+  bytesUploaded: number;
+  bytesTotal: number;
+  percentage: number;
+}
+```
+
+##### `on(event: EventType, callback: Function): this`
+
+Registers an event handler. Returns `this` for chaining.
+
+**Events:**
+
+- **`progress`** - `(bytesUploaded: number, bytesTotal: number) => void`
+  - Fired during upload with current progress
+  
+- **`success`** - `() => void`
+  - Fired when upload completes successfully
+  
+- **`error`** - `(error: Error) => void`
+  - Fired when upload fails
+  
+- **`chunkComplete`** - `(chunkSize: number, bytesUploaded: number, bytesTotal: number) => void`
+  - Fired after each chunk is uploaded
+
+```typescript
+upload
+  .on('progress', (uploaded, total) => console.log(`${uploaded}/${total}`))
+  .on('success', () => console.log('Done!'))
+  .on('error', (err) => console.error(err));
+```
+
+##### `off(event: EventType, callback?: Function): this`
+
+Removes an event handler. If no callback is provided, removes all handlers for that event.
+
+```typescript
+upload.off('progress', myProgressHandler);
+upload.off('progress'); // Remove all progress handlers
+```
+
+##### `findPreviousUploads(): Promise<PreviousUpload[]>`
+
+Finds previous uploads for the same file that can be resumed.
+
+```typescript
+const previousUploads = await upload.findPreviousUploads();
+if (previousUploads.length > 0) {
+  upload.resumeFromPreviousUpload(previousUploads[0]);
+}
+```
+
+##### `resumeFromPreviousUpload(previousUpload: PreviousUpload): void`
+
+Resumes from a previous upload session.
+
+```typescript
+upload.resumeFromPreviousUpload(previousUpload);
+await upload.start();
+```
 
 #### Properties
 
-**`url: string | null`**  
-Upload URL (available after creation)
+##### `url: string | null`
 
-**`file: { uri: string }`**  
-File being uploaded
+The upload URL assigned by the TUS server (available after upload is created).
 
-**`options: TusUploadOptions`**  
-Upload configuration
+```typescript
+console.log('Upload URL:', upload.url);
+```
+
+##### `file: { uri: string }`
+
+The file being uploaded.
+
+```typescript
+console.log('Uploading:', upload.file.uri);
+```
+
+##### `options: TusUploadOptions`
+
+The upload configuration options.
+
+```typescript
+console.log('Endpoint:', upload.options.endpoint);
+```
+
+---
 
 ### BackgroundUploadManager
 
+Singleton class that manages background uploads and auto-resume functionality.
+
 #### Methods
 
-**`initialize(options?): Promise<void>`**  
-Initialize the background upload manager
+##### `initialize(options?: NitroBackgroundOptions): Promise<void>`
 
-**`setAutoResume(enabled: boolean): void`**  
-Enable/disable auto-resume
+Initializes the background upload manager. Call this once when your app starts.
 
-**`pauseAllUploads(): void`**  
-Pause all active uploads
+```typescript
+await backgroundUploadManager.initialize({
+  enableNotifications: true,
+  notificationTitle: 'Uploading Files',
+  enableIOSBackgroundTask: true,
+});
+```
 
-**`clearCompletedUploads(): void`**  
-Remove completed uploads from storage
+**Options:**
 
-**`clearAllUploads(): void`**  
-Remove all uploads from storage
+| Option | Type | Default | Description |
+|--------|------|---------|-------------|
+| `enableNotifications` | `boolean` | `false` | Show upload progress notifications (Android) |
+| `notificationTitle` | `string` | - | Notification title text |
+| `enableIOSBackgroundTask` | `boolean` | `false` | Enable iOS background upload tasks |
 
-**`getUploadStats(): UploadStats`**  
-Get statistics about current uploads
+##### `setAutoResume(enabled: boolean): void`
 
-**`destroy(): void`**  
-Clean up resources
+Enable or disable automatic resume of uploads when app returns to foreground.
+
+```typescript
+backgroundUploadManager.setAutoResume(true);
+```
+
+##### `pauseAllUploads(): void`
+
+Pauses all active uploads.
+
+```typescript
+backgroundUploadManager.pauseAllUploads();
+```
+
+##### `clearCompletedUploads(): void`
+
+Removes completed uploads from persistent storage.
+
+```typescript
+backgroundUploadManager.clearCompletedUploads();
+```
+
+##### `clearAllUploads(): void`
+
+Removes all uploads from persistent storage.
+
+```typescript
+backgroundUploadManager.clearAllUploads();
+```
+
+##### `getUploadStats(): UploadStats`
+
+Returns statistics about current uploads.
+
+```typescript
+const stats = backgroundUploadManager.getUploadStats();
+console.log(`Active: ${stats.active}, Completed: ${stats.completed}`);
+```
+
+**Returns:**
+```typescript
+{
+  total: number;
+  active: number;
+  completed: number;
+  failed: number;
+  paused: number;
+}
+```
+
+##### `destroy(): void`
+
+Cleans up resources and removes listeners. Call this when unmounting your app.
+
+```typescript
+backgroundUploadManager.destroy();
+```
+
+---
 
 ### useUploadStore Hook
 
-Zustand store hook for managing upload state:
+Zustand store hook for accessing persistent upload state.
 
 ```typescript
-const store = useUploadStore();
+import { useUploadStore } from 'react-native-tus';
 
-// Methods
-store.addUpload(id, metadata);
-store.updateUpload(id, updates);
-store.removeUpload(id);
-store.getUpload(id);
-store.getAllUploads();
-store.getActiveUploads();
-store.clearCompleted();
-store.clearAll();
+function UploadList() {
+  const uploads = useUploadStore((state) => state.getAllUploads());
+  
+  return (
+    <View>
+      {uploads.map((upload) => (
+        <View key={upload.id}>
+          <Text>{upload.metadata.filename}</Text>
+          <Text>{((upload.offset / upload.uploadSize) * 100).toFixed(1)}%</Text>
+        </View>
+      ))}
+    </View>
+  );
+}
 ```
 
-## Advanced Usage
+**Available Methods:**
 
-### Custom Headers
+- `addUpload(id, metadata)` - Add upload to store
+- `updateUpload(id, updates)` - Update upload state
+- `removeUpload(id)` - Remove upload from store
+- `getUpload(id)` - Get single upload by ID
+- `getAllUploads()` - Get all uploads
+- `getActiveUploads()` - Get uploads with status 'uploading' or 'pending'
+- `clearCompleted()` - Remove completed uploads
+- `clearAll()` - Remove all uploads
+
+## 📱 Running the Example App
+
+The example app demonstrates a simple file upload flow with progress tracking.
+
+### iOS
+
+```sh
+cd example
+yarn install
+bundle install
+cd ios
+bundle exec pod install
+cd ..
+yarn ios
+```
+
+### Android
+
+```sh
+cd example
+yarn install
+yarn android
+```
+
+The example app allows you to:
+- Pick a file using the native document picker
+- Upload it to a TUS server
+- Track upload progress in real-time
+- See success/error states
+
+## 🔧 Advanced Usage
+
+### Custom Headers (Authentication)
 
 ```typescript
 const upload = new TusUpload(fileUri, {
@@ -323,33 +505,25 @@ useEffect(() => {
 }, []);
 ```
 
-## Platform-Specific Notes
+## 🌐 Platform-Specific Notes
 
 ### iOS
 
 - Uses [TUSKit](https://github.com/tus/TUSKit) (~3.4.1) for native uploads
 - Background uploads use `BGTaskScheduler` (iOS 13+)
-- Requires background modes configuration in Info.plist
+- **HTTPS required** for background uploads (iOS security requirement)
+- HTTP endpoints automatically use foreground uploads
+- Requires background modes configuration in `Info.plist`
 
 ### Android
 
 - Uses [tus-android-client](https://github.com/tus/tus-android-client) (0.1.12)
-- Background uploads use WorkManager
+- Background uploads use background threads with foreground service notifications
 - Supports both `file://` and `content://` URIs
+- Works with both HTTP and HTTPS endpoints
 - Requires notification and foreground service permissions
 
-## Comparison with Other Libraries
-
-| Feature | react-native-tus | react-native-tus-client | tus-js-client |
-|---------|------------------|-------------------------|---------------|
-| Performance | ⚡ Native (Nitro) | ⚠️ Bridge | 🌐 Web only |
-| iOS Background | ✅ Yes | ❌ No | N/A |
-| Android Background | ✅ Yes | ❌ No | N/A |
-| Persistent State | ✅ MMKV | ❌ No | 🍪 localStorage |
-| TypeScript | ✅ Full | ⚠️ Partial | ✅ Full |
-| Maintained | ✅ Active | ❌ Outdated | ✅ Active |
-
-## Troubleshooting
+## 🐛 Troubleshooting
 
 ### iOS Build Errors
 
@@ -363,14 +537,14 @@ pod install
 
 ### Android ProGuard
 
-Add ProGuard rules if using code obfuscation:
+If using code obfuscation, add these ProGuard rules:
 
 ```proguard
 -keep class io.tus.** { *; }
 -keep class com.margelo.nitro.tus.** { *; }
 ```
 
-### MMKV Setup
+### MMKV Setup Issues
 
 react-native-mmkv should auto-link. If you have issues:
 
@@ -378,23 +552,60 @@ react-native-mmkv should auto-link. If you have issues:
 cd ios && pod install
 ```
 
-## Contributing
+For Android, ensure you've run:
 
-See [CONTRIBUTING.md](CONTRIBUTING.md) for development workflow and guidelines.
+```sh
+cd android && ./gradlew clean
+```
 
-## License
+## 📄 License
 
-MIT
+MIT License - see the [LICENSE](LICENSE) file for details.
 
-## Credits
+## 🙏 Acknowledgments
 
-- Built with [Nitro Modules](https://github.com/mrousavy/nitro) by [@mrousavy](https://github.com/mrousavy)
-- Uses [TUSKit](https://github.com/tus/TUSKit) for iOS
-- Uses [tus-android-client](https://github.com/tus/tus-android-client) for Android
-- API inspired by [tus-js-client](https://github.com/tus/tus-js-client)
+This library is built on top of excellent open-source projects:
 
-## Support
+### Core Technologies
 
-- 📚 [TUS Protocol Documentation](https://tus.io/)
+- **[Nitro Modules](https://github.com/mrousavy/nitro)** by [@mrousavy](https://github.com/mrousavy)
+  - High-performance native module framework that enables zero-overhead native calls
+  - Powers the seamless TypeScript ↔ Native communication
+
+### Native TUS Implementations
+
+- **[TUSKit](https://github.com/tus/TUSKit)** - iOS TUS client
+  - Robust Swift implementation of the TUS protocol
+  - Handles background uploads and iOS-specific requirements
+
+- **[tus-android-client](https://github.com/tus/tus-android-client)** - Android TUS client
+  - Reliable Kotlin/Java implementation for Android
+  - Supports both file:// and content:// URIs
+
+### API Inspiration
+
+- **[tus-js-client](https://github.com/tus/tus-js-client)** - JavaScript TUS client
+  - Inspired the API design for familiarity and ease of migration
+
+- **[react-native-tus-client](https://github.com/tus/react-native-tus-client)**
+  - Provided inspiration for React Native specific design patterns and implementation details
+
+### Additional Dependencies
+
+- **[react-native-mmkv](https://github.com/mrousavy/react-native-mmkv)** - Fast, persistent key-value storage
+- **[zustand](https://github.com/pmndrs/zustand)** - Lightweight state management
+
+## 📚 Resources
+
+- 📖 [TUS Protocol Documentation](https://tus.io/)
 - 💬 [GitHub Issues](https://github.com/zarifnazmi/react-native-tus/issues)
-- 🔥 [Nitro Modules Docs](https://nitro.margelo.com/)
+- 🔥 [Nitro Modules Documentation](https://nitro.margelo.com/)
+- 📦 [npm Package](https://www.npmjs.com/package/react-native-tus)
+
+## 🤝 Contributing
+
+Contributions are welcome! Please see [CONTRIBUTING.md](CONTRIBUTING.md) for guidelines.
+
+---
+
+Made with ❤️ using [Nitro Modules](https://nitro.margelo.com/)
