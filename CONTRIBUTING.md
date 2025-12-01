@@ -23,6 +23,22 @@ yarn
 
 This project uses Nitro Modules. If you're not familiar with how Nitro works, make sure to check the [Nitro Modules Docs](https://nitro.margelo.com/).
 
+### Example App Configuration
+
+Before running the example app, you need to set up the TUS server endpoint configuration:
+
+1. Copy the example configuration file:
+   ```sh
+   cd example
+   cp config.example.ts config.ts
+   ```
+
+2. Edit `config.ts` to set your TUS server endpoint. You can use the public demo server or your own development server.
+
+**Important**: The `example/config.ts` file is gitignored to prevent committing development server details. Never commit this file or hardcode server IPs in the source code.
+
+### Nitrogen Code Generation
+
 You need to run [Nitrogen](https://nitro.margelo.com/docs/nitrogen) to generate the boilerplate code required for this project. The example app will not build without this step.
 
 Run **Nitrogen** in following cases:

@@ -422,6 +422,18 @@ function UploadList() {
 
 The example app demonstrates a simple file upload flow with progress tracking.
 
+### Setup
+
+1. **Configure the TUS endpoint** (first time only):
+   ```sh
+   cd example
+   cp config.example.ts config.ts
+   ```
+   
+   Edit `config.ts` to set your TUS server endpoint. The default uses the public demo server at `https://tusd.tusdemo.net/files/`.
+
+2. **Install dependencies**:
+
 ### iOS
 
 ```sh
@@ -447,6 +459,8 @@ The example app allows you to:
 - Upload it to a TUS server
 - Track upload progress in real-time
 - See success/error states
+
+> **Note**: The `example/config.ts` file is gitignored to keep development server details private. Always use `config.example.ts` as a template for your configuration.
 
 ## 🔧 Advanced Usage
 

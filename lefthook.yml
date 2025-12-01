@@ -7,6 +7,15 @@ pre-commit:
     types:
       glob: "*.{js,ts, jsx, tsx}"
       run: npx tsc
+    check-ip:
+      run: |
+        # Check for accidentally committed development IPs (only check added lines, not removed ones)
+        # Excludes documentation files where IPs might be mentioned for examples
+        if git diff --cached --name-only | grep -v -E '(lefthook.yml|RELEASE.md|SECURITY_SETUP.md|\.md$)' | xargs git diff --cached | grep -E '^\+.*[0-9]{1,3}\.[0-9]{1,3}\.[0-9]{1,3}\.[0-9]{1,3}' > /dev/null; then
+          echo "❌ Error: IP address found being added in staged files."
+          echo "Development IPs should not be committed. Use config files that are gitignored."
+          exit 1
+        fi
 commit-msg:
   parallel: true
   commands:

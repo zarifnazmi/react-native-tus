@@ -84,3 +84,6 @@ android/generated
 
 # React Native Nitro Modules
 nitrogen/
+
+# Development configuration (contains local server IPs)
+example/config.ts

@@ -30,18 +30,11 @@
 		<true/>
 		<key>NSAllowsLocalNetworking</key>
 		<true/>
-		<key>NSExceptionDomains</key>
-		<dict>
-			<key>157.245.202.155</key>
-			<dict>
-				<key>NSExceptionAllowsInsecureHTTPLoads</key>
-				<true/>
-				<key>NSIncludesSubdomains</key>
-				<true/>
-				<key>NSExceptionRequiresForwardSecrecy</key>
-				<false/>
-			</dict>
-		</dict>
+		<!-- 
+		For production apps, disable NSAllowsArbitraryLoads and add specific
+		NSExceptionDomains for HTTP endpoints you need to support.
+		See: https://developer.apple.com/documentation/security/preventing_insecure_network_connections
+		-->
 	</dict>
 	<key>NSLocationWhenInUseUsageDescription</key>
 	<string></string>

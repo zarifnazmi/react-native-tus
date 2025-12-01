@@ -9,6 +9,7 @@ import {
 } from 'react-native';
 import { TusUpload, backgroundUploadManager } from 'react-native-tus';
 import { pick, types } from '@react-native-documents/picker';
+import { config } from '../config';
 
 /**
  * Simplified TUS Upload Example
@@ -18,6 +19,9 @@ import { pick, types } from '@react-native-documents/picker';
  * 2. Upload it to a TUS server
  * 3. Track upload progress
  * 4. Handle success/error states
+ *
+ * Note: The TUS endpoint is configured in config.ts (gitignored for development)
+ * See config.example.ts for the template.
  */
 function App(): React.JSX.Element {
   const [currentUpload, setCurrentUpload] = useState<{
@@ -67,7 +71,7 @@ function App(): React.JSX.Element {
 
       // Create upload instance
       const upload = new TusUpload(file.uri, {
-        endpoint: 'http://157.245.202.155:8000/api/v1/files',
+        endpoint: config.tusEndpoint,
         metadata: {
           filename: file.name ?? 'file',
           contentType:
