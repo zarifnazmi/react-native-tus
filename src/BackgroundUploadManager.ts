@@ -2,7 +2,7 @@ import { NitroModules } from 'react-native-nitro-modules';
 import { AppState, type AppStateStatus } from 'react-native';
 import type { TusClient } from './Tus.nitro';
 import type { NitroBackgroundOptions, UploadMetadata } from './types';
-import { useUploadStore, initializeUploadStore } from './store/uploadStore';
+import { useUploadStore } from './store/uploadStore';
 import { TusUpload } from './TusUpload';
 
 // Get the TusClient HybridObject
@@ -38,18 +38,14 @@ export class BackgroundUploadManager {
    */
   async initialize(options: NitroBackgroundOptions = {}): Promise<void> {
     if (this.isInitialized) {
-      console.warn('BackgroundUploadManager already initialized');
       return;
     }
-
-    // Initialize upload store from MMKV
-    initializeUploadStore();
 
     // Configure native background uploads
     try {
       TusClientModule.configureBackgroundUploads(options);
     } catch (error) {
-      console.error('Failed to configure background uploads:', error);
+      // Silently handle configuration errors
     }
 
     // Set up app state listener for auto-resume
@@ -82,10 +78,8 @@ export class BackgroundUploadManager {
     if (nextAppState === 'active' && this.autoResumeEnabled) {
       // App came to foreground - resume pending uploads
       await this.resumePendingUploads();
-    } else if (nextAppState === 'background') {
-      // App went to background - uploads will continue via native layer
-      console.log('App backgrounded - uploads will continue in native layer');
     }
+    // App went to background - uploads will continue via native layer
   }
 
   /**
@@ -94,8 +88,6 @@ export class BackgroundUploadManager {
   async resumePendingUploads(): Promise<void> {
     try {
       const activeUploads = useUploadStore.getState().getActiveUploads();
-
-      console.log(`Found ${activeUploads.length} active uploads to resume`);
 
       for (const uploadMetadata of activeUploads) {
         try {
@@ -107,12 +99,9 @@ export class BackgroundUploadManager {
 
           // If upload has a URL, it can be resumed
           if (uploadMetadata.url) {
-            console.log(`Resuming upload: ${uploadMetadata.id}`);
             await upload.start();
           }
         } catch (error) {
-          console.error(`Failed to resume upload ${uploadMetadata.id}:`, error);
-
           // Mark as failed in store
           useUploadStore.getState().updateUpload(uploadMetadata.id, {
             status: 'failed',
@@ -120,7 +109,7 @@ export class BackgroundUploadManager {
         }
       }
     } catch (error) {
-      console.error('Failed to resume pending uploads:', error);
+      // Silently handle resume errors
     }
   }
 

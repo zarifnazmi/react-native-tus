@@ -1,33 +1,52 @@
 import { create } from 'zustand';
+import { persist, createJSONStorage } from 'zustand/middleware';
 import { MMKV } from 'react-native-mmkv';
-import type { UploadMetadata } from '../types';
+import type { UploadMetadata, TusUploadOptions } from '../types';
+
+// Type for serializable options (without callback functions)
+type SerializableOptions = Pick<
+  TusUploadOptions,
+  | 'endpoint'
+  | 'chunkSize'
+  | 'retryDelays'
+  | 'storeFingerprintForResuming'
+  | 'removeFingerprintOnSuccess'
+  | 'uploadLengthDeferred'
+  | 'overridePatchMethod'
+  | 'parallelize'
+  | 'metadata'
+  | 'headers'
+>;
 
 // MMKV instance for persistent storage
-const storage = new MMKV({
+const mmkvStorage = new MMKV({
   id: 'tus-uploads-storage',
 });
 
-// Storage key for uploads
-const UPLOADS_KEY = 'tus_uploads';
-
-// Helper functions for MMKV storage
-const getStoredUploads = (): Record<string, UploadMetadata> => {
-  try {
-    const stored = storage.getString(UPLOADS_KEY);
-    if (!stored) return {};
-    return JSON.parse(stored);
-  } catch (error) {
-    console.error('Failed to read uploads from storage:', error);
-    return {};
-  }
-};
-
-const setStoredUploads = (uploads: Record<string, UploadMetadata>) => {
-  try {
-    storage.set(UPLOADS_KEY, JSON.stringify(uploads));
-  } catch (error) {
-    console.error('Failed to save uploads to storage:', error);
-  }
+// Create Zustand-compatible storage adapter for MMKV
+const zustandMMKVStorage = {
+  setItem: (name: string, value: string) => {
+    try {
+      mmkvStorage.set(name, value);
+    } catch (error) {
+      // Non-blocking - silently handle storage errors
+    }
+  },
+  getItem: (name: string): string | null => {
+    try {
+      const value = mmkvStorage.getString(name);
+      return value ?? null;
+    } catch (error) {
+      return null;
+    }
+  },
+  removeItem: (name: string) => {
+    try {
+      mmkvStorage.delete(name);
+    } catch (error) {
+      // Silently handle deletion errors
+    }
+  },
 };
 
 // Upload store interface
@@ -41,96 +60,128 @@ interface UploadStore {
   getUpload: (id: string) => UploadMetadata | undefined;
   getAllUploads: () => UploadMetadata[];
   getActiveUploads: () => UploadMetadata[];
-  restoreUploads: () => void;
   clearCompleted: () => void;
   clearAll: () => void;
 }
 
-// Create the store
-export const useUploadStore = create<UploadStore>((set, get) => ({
-  uploads: {},
+// Create the store with Zustand persist middleware
+export const useUploadStore = create<UploadStore>()(
+  persist(
+    (set, get) => ({
+      uploads: {},
 
-  addUpload: (id: string, metadata: UploadMetadata) => {
-    set((state: UploadStore) => {
-      const newUploads = {
-        ...state.uploads,
-        [id]: metadata,
-      };
-      setStoredUploads(newUploads);
-      return { uploads: newUploads };
-    });
-  },
+      addUpload: (id: string, metadata: UploadMetadata) => {
+        set((state: UploadStore) => {
+          // Clean metadata to avoid storing functions or circular refs
+          const cleanedMetadata: UploadMetadata = {
+            ...metadata,
+            // Only store serializable parts of options
+            options: metadata.options
+              ? ({
+                  endpoint: metadata.options.endpoint,
+                  chunkSize: metadata.options.chunkSize,
+                  retryDelays: metadata.options.retryDelays,
+                  storeFingerprintForResuming:
+                    metadata.options.storeFingerprintForResuming,
+                  removeFingerprintOnSuccess:
+                    metadata.options.removeFingerprintOnSuccess,
+                  uploadLengthDeferred: metadata.options.uploadLengthDeferred,
+                  overridePatchMethod: metadata.options.overridePatchMethod,
+                  parallelize: metadata.options.parallelize,
+                  // Only store serializable metadata, not functions
+                  metadata: metadata.options.metadata,
+                  headers: metadata.options.headers,
+                } as SerializableOptions & { endpoint: string })
+              : ({ endpoint: '' } as TusUploadOptions),
+          };
 
-  updateUpload: (id: string, updates: Partial<UploadMetadata>) => {
-    set((state: UploadStore) => {
-      const existing = state.uploads[id];
-      if (!existing) return state;
+          return {
+            uploads: {
+              ...state.uploads,
+              [id]: cleanedMetadata,
+            },
+          };
+        });
+      },
 
-      const updated = {
-        ...existing,
-        ...updates,
-        updatedAt: Date.now(),
-      };
+      updateUpload: (id: string, updates: Partial<UploadMetadata>) => {
+        set((state: UploadStore) => {
+          const existing = state.uploads[id];
+          if (!existing) return state;
 
-      const newUploads = {
-        ...state.uploads,
-        [id]: updated,
-      };
+          const updated: UploadMetadata = {
+            ...existing,
+            ...updates,
+            updatedAt: Date.now(),
+          };
 
-      setStoredUploads(newUploads);
-      return { uploads: newUploads };
-    });
-  },
+          return {
+            uploads: {
+              ...state.uploads,
+              [id]: updated,
+            },
+          };
+        });
+      },
 
-  removeUpload: (id: string) => {
-    set((state: UploadStore) => {
-      const newUploads = { ...state.uploads };
-      delete newUploads[id];
-      setStoredUploads(newUploads);
-      return { uploads: newUploads };
-    });
-  },
+      removeUpload: (id: string) => {
+        set((state: UploadStore) => {
+          const newUploads = { ...state.uploads };
+          delete newUploads[id];
+          return { uploads: newUploads };
+        });
+      },
 
-  getUpload: (id: string) => {
-    return get().uploads[id];
-  },
+      getUpload: (id: string) => {
+        return get().uploads[id];
+      },
 
-  getAllUploads: () => {
-    return Object.values(get().uploads);
-  },
+      getAllUploads: () => {
+        return Object.values(get().uploads);
+      },
 
-  getActiveUploads: () => {
-    return Object.values(get().uploads).filter(
-      (upload: UploadMetadata) =>
-        upload.status === 'uploading' || upload.status === 'pending'
-    );
-  },
+      getActiveUploads: () => {
+        return Object.values(get().uploads).filter(
+          (upload: UploadMetadata) =>
+            upload.status === 'uploading' || upload.status === 'pending'
+        );
+      },
 
-  restoreUploads: () => {
-    const stored = getStoredUploads();
-    set({ uploads: stored });
-  },
+      clearCompleted: () => {
+        set((state: UploadStore) => {
+          const newUploads = Object.fromEntries(
+            Object.entries(state.uploads).filter(
+              ([, upload]: [string, UploadMetadata]) =>
+                upload.status !== 'completed'
+            )
+          ) as Record<string, UploadMetadata>;
+          return { uploads: newUploads };
+        });
+      },
 
-  clearCompleted: () => {
-    set((state: UploadStore) => {
-      const newUploads = Object.fromEntries(
-        Object.entries(state.uploads).filter(
-          ([, upload]: [string, UploadMetadata]) =>
-            upload.status !== 'completed'
-        )
-      ) as Record<string, UploadMetadata>;
-      setStoredUploads(newUploads);
-      return { uploads: newUploads };
-    });
-  },
-
-  clearAll: () => {
-    storage.delete(UPLOADS_KEY);
-    set({ uploads: {} });
-  },
-}));
-
-// Initialize store with persisted uploads on app start
-export const initializeUploadStore = () => {
-  useUploadStore.getState().restoreUploads();
-};
+      clearAll: () => {
+        set({ uploads: {} });
+      },
+    }),
+    {
+      name: 'tus-uploads-storage', // Storage key in MMKV
+      storage: createJSONStorage(() => zustandMMKVStorage),
+      // Only persist the uploads object, not functions
+      partialize: (state) => ({ uploads: state.uploads }),
+      // Handle migration if needed
+      version: 1,
+      // Skip hydration errors (non-blocking)
+      skipHydration: false,
+      onRehydrateStorage: () => (_state, error) => {
+        if (error) {
+          // Clear corrupted storage and start fresh
+          try {
+            mmkvStorage.delete('tus-uploads-storage');
+          } catch (clearError) {
+            // Silently handle clear errors
+          }
+        }
+      },
+    }
+  )
+);

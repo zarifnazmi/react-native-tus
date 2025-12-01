@@ -175,7 +175,7 @@ export class TusUpload {
         status: 'failed',
       });
     } catch (error) {
-      console.error('Error aborting upload:', error);
+      // Silently handle abort errors
     }
   }
 
@@ -190,7 +190,6 @@ export class TusUpload {
     try {
       return this.nativeUpload.getProgress();
     } catch (error) {
-      console.error('Error getting progress:', error);
       return null;
     }
   }

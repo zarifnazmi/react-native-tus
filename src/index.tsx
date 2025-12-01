@@ -4,7 +4,7 @@ export {
   backgroundUploadManager,
   BackgroundUploadManager,
 } from './BackgroundUploadManager';
-export { useUploadStore, initializeUploadStore } from './store/uploadStore';
+export { useUploadStore } from './store/uploadStore';
 
 // Type exports
 export type {
