@@ -7,22 +7,28 @@ class BackgroundUploadManager {
     
     private let backgroundTaskIdentifier = "com.tus.backgroundUpload"
     private var options: BackgroundOptions?
+    private static var didRegisterTasks = false
     
     private init() {}
     
     func configure(options: BackgroundOptions) {
         self.options = options
-        registerBackgroundTasks()
+        // BGTaskScheduler registration must happen during app launch (AppDelegate)
+        // to comply with Apple's requirements. The host app is responsible for
+        // registering the task identifier in AppDelegate. We only keep scheduling here.
     }
     
-    private func registerBackgroundTasks() {
+    public func registerBackgroundTasksIfNeeded() {
         if #available(iOS 13.0, *) {
+            // Ensure we only register once if the host app opts into library-based registration
+            guard !Self.didRegisterTasks else { return }
             BGTaskScheduler.shared.register(
                 forTaskWithIdentifier: backgroundTaskIdentifier,
                 using: nil
             ) { task in
                 self.handleBackgroundUpload(task: task as! BGProcessingTask)
             }
+            Self.didRegisterTasks = true
         }
     }
     
@@ -35,7 +41,6 @@ class BackgroundUploadManager {
             do {
                 try BGTaskScheduler.shared.submit(request)
             } catch {
-                print("Could not schedule background upload: \(error)")
             }
         }
     }
