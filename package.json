@@ -1,6 +1,6 @@
 {
   "name": "react-native-tus",
-  "version": "0.1.0",
+  "version": "0.0.1",
   "description": "High-performance TUS (resumable upload) client for React Native with native performance, background uploads, and persistent state",
   "main": "./lib/module/index.js",
   "types": "./lib/typescript/src/index.d.ts",
