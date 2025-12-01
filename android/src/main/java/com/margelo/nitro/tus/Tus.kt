@@ -4,6 +4,8 @@ import android.content.Context
 import android.content.SharedPreferences
 import android.net.Uri
 import com.facebook.proguard.annotations.DoNotStrip
+import com.margelo.nitro.NitroModules
+import com.margelo.nitro.core.Promise
 import io.tus.android.client.TusPreferencesURLStore
 import io.tus.java.client.TusClient
 import io.tus.java.client.TusExecutor
@@ -18,7 +20,7 @@ import java.util.concurrent.ConcurrentHashMap
 @DoNotStrip
 class HybridTusUpload(
     private val context: Context,
-    private val id: String,
+    private val _id: String,
     fileUri: String,
     private val options: TusOptions
 ) : HybridTusUploadSpec() {
@@ -28,7 +30,7 @@ class HybridTusUpload(
     private var executor: TusExecutor? = null
     private var uploadUrl: String? = null
     private var currentOffset: Double = 0.0
-    private var uploadSize: Double = 0.0
+    private var _uploadSize: Double = 0.0
     private val fileUriString: String = fileUri
     private var isPaused: Boolean = false
     
@@ -43,6 +45,9 @@ class HybridTusUpload(
         setupUpload(fileUri)
     }
     
+    /**
+     * Set up the TUS client with configuration
+     */
     private fun setupTusClient() {
         tusClient = TusClient()
         tusClient?.uploadCreationURL = URL(options.endpoint)
@@ -52,20 +57,29 @@ class HybridTusUpload(
         tusClient?.enableResuming(TusPreferencesURLStore(prefs))
         
         // Set custom headers
-        options.headers?.forEach { (key, value) ->
-            tusClient?.setHeader(key, value)
+        if (!options.headers.isNullOrEmpty()) {
+            tusClient?.setHeaders(options.headers!!)
         }
     }
     
+    /**
+     * Set up the upload from a file URI
+     * Handles both content:// and file:// URIs
+     */
     private fun setupUpload(fileUri: String) {
         try {
             val uri = Uri.parse(fileUri)
             val file = when {
                 fileUri.startsWith("content://") -> {
-                    // Handle content:// URIs
+                    // Handle content:// URIs by copying to temp file
                     val inputStream = context.contentResolver.openInputStream(uri)
+                    
+                    if (inputStream == null) {
+                        throw IllegalArgumentException("Cannot open input stream for URI: $fileUri")
+                    }
+                    
                     val tempFile = File.createTempFile("tus_upload", null, context.cacheDir)
-                    inputStream?.use { input ->
+                    inputStream.use { input ->
                         tempFile.outputStream().use { output ->
                             input.copyTo(output)
                         }
@@ -84,28 +98,36 @@ class HybridTusUpload(
                 throw IllegalArgumentException("File not found: $fileUri")
             }
             
-            uploadSize = file.length().toDouble()
+            if (!file.canRead()) {
+                throw IllegalArgumentException("File not readable: $fileUri")
+            }
+            
+            _uploadSize = file.length().toDouble()
             tusUpload = TusUpload(file)
             
             // Set metadata
             options.metadata?.forEach { (key, value) ->
                 tusUpload?.metadata?.put(key, value)
             }
-            
         } catch (e: Exception) {
             throw RuntimeException("Failed to setup upload: ${e.message}", e)
         }
     }
     
     // MARK: - Properties
-    override fun getId(): String = id
-    override fun getUrl(): String? = uploadUrl
-    override fun getFile(): String = fileUriString
-    override fun getUploadSize(): Double = uploadSize
-    override fun getOffset(): Double = currentOffset
-    override fun getMetadata(): Map<String, String> = options.metadata ?: emptyMap()
+    override val id: String get() = _id
+    override val url: String? get() = uploadUrl
+    override val file: String get() = fileUriString
+    override val uploadSize: Double get() = _uploadSize
+    override val offset: Double get() = currentOffset
+    override val metadata: Map<String, String> get() = options.metadata ?: emptyMap()
     
     // MARK: - Methods
+    
+    /**
+     * Start the upload
+     * @return Promise that resolves when upload completes
+     */
     override fun start(): Promise<Unit> {
         val promise = Promise<Unit>()
         isPaused = false
@@ -113,19 +135,24 @@ class HybridTusUpload(
         executor = object : TusExecutor() {
             override fun makeAttempt() {
                 try {
-                    val uploader: TusUploader = tusClient?.resumeOrCreateUpload(tusUpload) 
-                        ?: throw IllegalStateException("TusClient not initialized")
+                    val upload = tusUpload ?: throw IllegalStateException("TusUpload not initialized")
+                    val client = tusClient ?: throw IllegalStateException("TusClient not initialized")
                     
+                    val uploader: TusUploader = client.resumeOrCreateUpload(upload)
                     uploadUrl = uploader.uploadURL?.toString()
                     
-                    // Set chunk size if specified
-                    options.chunkSize?.let { 
-                        uploader.chunkSize = it.toInt()
+                    if (uploadUrl == null || uploadUrl.isNullOrEmpty()) {
+                        throw IllegalStateException("Upload URL is null after creation. Location header may not have been received correctly.")
                     }
                     
-                    var uploadedBytes: Long
+                    // Set chunk size immediately after creating uploader
+                    val chunkSize = options.chunkSize?.toInt() ?: (10 * 1024 * 1024) // Default 10MB
+                    uploader.chunkSize = chunkSize
+                    
+                    var uploadedBytes: Int
                     do {
-                        uploadedBytes = uploader.upload()
+                        uploadedBytes = uploader.uploadChunk()
+                        
                         if (uploadedBytes > -1) {
                             currentOffset = uploader.offset.toDouble()
                             val totalBytes = tusUpload?.size ?: 0L
@@ -151,7 +178,6 @@ class HybridTusUpload(
                             uploader.finish()
                             return
                         }
-                        
                     } while (uploadedBytes > -1)
                     
                     uploader.finish()
@@ -159,6 +185,7 @@ class HybridTusUpload(
                     promise.resolve(Unit)
                     
                 } catch (e: Exception) {
+                    
                     val error = UploadError(
                         code = "UPLOAD_FAILED",
                         message = e.message ?: "Upload failed",
@@ -175,6 +202,7 @@ class HybridTusUpload(
             try {
                 executor?.makeAttempts()
             } catch (e: Exception) {
+                
                 val error = UploadError(
                     code = "UPLOAD_FAILED",
                     message = e.message ?: "Upload failed",
@@ -188,24 +216,38 @@ class HybridTusUpload(
         return promise
     }
     
+    /**
+     * Pause the upload
+     */
     override fun pause() {
         isPaused = true
     }
     
+    /**
+     * Resume a paused upload
+     * @return Promise that resolves when upload resumes
+     */
     override fun resume(): Promise<Unit> {
         return start()
     }
     
+    /**
+     * Abort the upload
+     * @return Promise that resolves when upload is aborted
+     */
     override fun abort(): Promise<Unit> {
         val promise = Promise<Unit>()
         isPaused = true
-        executor?.cancel()
         promise.resolve(Unit)
         return promise
     }
     
+    /**
+     * Get current upload progress
+     * @return Upload progress information
+     */
     override fun getProgress(): UploadProgress {
-        val totalBytes = uploadSize
+        val totalBytes = _uploadSize
         return UploadProgress(
             bytesUploaded = currentOffset,
             bytesTotal = totalBytes,
@@ -215,35 +257,72 @@ class HybridTusUpload(
 }
 
 // MARK: - HybridTusClient Implementation
+
+/**
+ * Main TUS client that manages upload instances
+ */
 @DoNotStrip
-class HybridTusClient(private val context: Context) : HybridTusClientSpec() {
+class HybridTusClient() : HybridTusClientSpec() {
+    private var context: Context? = null
     private val uploads = ConcurrentHashMap<String, HybridTusUpload>()
     private var backgroundOptions: BackgroundOptions? = null
     
-    override fun createUpload(fileUri: String, options: TusOptions): HybridTusUpload {
+    /**
+     * Create a new upload instance
+     * @param fileUri URI of the file to upload
+     * @param options Upload configuration options
+     * @return Upload instance
+     */
+    override fun createUpload(fileUri: String, options: TusOptions): HybridTusUploadSpec {
+        val appContext = getApplicationContext()
         val uploadId = UUID.randomUUID().toString()
-        val upload = HybridTusUpload(context, uploadId, fileUri, options)
+        val upload = HybridTusUpload(appContext, uploadId, fileUri, options)
         uploads[uploadId] = upload
         return upload
     }
+
+    private fun getApplicationContext(): Context {
+        val reactContext = NitroModules.applicationContext
+            ?: throw IllegalStateException("ReactApplicationContext not available. Make sure NitroModules is properly initialized.")
+        return reactContext.applicationContext
+            ?: throw IllegalStateException("Application context not available from ReactApplicationContext.")
+    }
     
-    override fun getUpload(uploadId: String): HybridTusUpload? {
+    /**
+     * Get an existing upload by ID
+     * @param uploadId Upload identifier
+     * @return Upload instance if found
+     */
+    override fun getUpload(uploadId: String): HybridTusUploadSpec? {
         return uploads[uploadId]
     }
     
+    /**
+     * Remove an upload from the manager
+     * @param uploadId Upload identifier
+     */
     override fun removeUpload(uploadId: String) {
         uploads.remove(uploadId)
     }
     
-    override fun getAllUploads(): List<HybridTusUpload> {
-        return uploads.values.toList()
+    /**
+     * Get all managed uploads
+     * @return Array of all upload instances
+     */
+    override fun getAllUploads(): Array<HybridTusUploadSpec> {
+        return uploads.values.toTypedArray()
     }
     
+    /**
+     * Configure background upload support
+     * @param options Background upload configuration
+     */
     override fun configureBackgroundUploads(options: BackgroundOptions) {
         this.backgroundOptions = options
-        
+
         if (options.enableNotifications == true) {
-            NotificationHelper.createNotificationChannel(context)
+            val appContext = getApplicationContext()
+            NotificationHelper.createNotificationChannel(appContext)
         }
     }
 }
